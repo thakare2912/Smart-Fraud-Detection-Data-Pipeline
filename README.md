@@ -3,7 +3,7 @@
 A real-time data pipeline for fraud detection and spending trend analysis.
 ## Architecture Overview
 
-![Pipeline Architecture Diagram](pipeline_architecture.png)  
+<img src="pipeline_architecture.png" alt="Pipeline Architecture Diagram" width="600" style="max-width:100%;">  
 *Diagram of the data flow from Kafka to Snowflake*
 
 
