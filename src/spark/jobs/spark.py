@@ -126,24 +126,24 @@ def read_from_minio(spark):
 def process_stream(transactions_df, users_df, products_df):
     logger.info("Processing stream: joins + fraud logic + aggregates")
 
-    # ✅ Fix conflicting column names
+    #  Fix conflicting column names
     users_df = users_df.withColumnRenamed("country", "user_country") \
                        .withColumnRenamed("name", "user_name")
 
     products_df = products_df.withColumnRenamed("country", "product_country") \
                              .withColumnRenamed("name", "product_name")
 
-    # ✅ Apply watermark ONLY on streaming transactions
+    #  Apply watermark ONLY on streaming transactions
     transactions_df = transactions_df.withWatermark("timestamp", "15 minutes")
 
-    # ✅ JOIN streaming transactions with static users and products
+    #  JOIN streaming transactions with static users and products
     enriched_df = (
         transactions_df
         .join(users_df, on="user_id", how="leftOuter")
         .join(products_df, on="product_id", how="leftOuter")
     )
 
-    # ✅ Add fraud detection columns
+    # Add fraud detection columns
     fraud_df = (
         enriched_df
         .withColumn(
@@ -167,7 +167,7 @@ def process_stream(transactions_df, users_df, products_df):
         )
     )
 
-    # ✅ User spend trend (with window_start and window_end)
+    #  User spend trend (with window_start and window_end)
     user_spend_df = (
         fraud_df
         .groupBy(
@@ -183,7 +183,7 @@ def process_stream(transactions_df, users_df, products_df):
         .drop("window")
     )
 
-    # ✅ Category sales trend (with window_start and window_end)
+    #  Category sales trend (with window_start and window_end)
     category_trend_df = (
         fraud_df
         .groupBy(
@@ -212,12 +212,12 @@ def process_and_write_fraud(df, batch_id):
         if row_count > 0:
             logger.info(f"Fraud Batch {batch_id} → {row_count} rows")
 
-            # ✅ Drop all legacy ambiguous date columns
+            # Drop all legacy ambiguous date columns
             for col_name in ["year", "month", "day"]:
                 if col_name in df.columns:
                     df = df.drop(col_name)
 
-            # ✅ Add correct ones
+            #  Add correct ones
             df = (
                 df
                 .withColumn("tx_year", year(col("timestamp")))
@@ -225,7 +225,7 @@ def process_and_write_fraud(df, batch_id):
                 .withColumn("tx_day", dayofmonth(col("timestamp")))
             )
 
-            # ✅ Write with clear partitions only
+            #  Write with clear partitions only
             output_path = f"s3a://{MINIO_BUCKET}/process/fraud_records/"
             df.write.mode("append").partitionBy(
                 "payment_method", "tx_year", "tx_month", "tx_day"
