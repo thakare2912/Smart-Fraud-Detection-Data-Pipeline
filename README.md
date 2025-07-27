@@ -1,21 +1,11 @@
 # Smart Fraud Detection Data Pipeline
 
-An end-to-end real-time data pipeline that detects fraudulent transactions, analyzes user spending behavior, and generates product trend insights using cutting-edge big data tools. Built using **Kafka**, **Spark Structured Streaming**, **MinIO**, **Airflow**, and **Snowflake**.
+A real-time data pipeline for fraud detection and spending trend analysis.
+## Architecture Overview
 
----
-## Architecture
+![Pipeline Architecture Diagram](assets/pipeline_architecture.png)  
+*Diagram of the data flow from Kafka to Snowflake*
 
-```mermaid
-flowchart LR
-    A[Kafka Producer] --> B[Kafka Consumer]
-    B --> C[MinIO Raw Storage]
-    C --> D[Spark Streaming]
-    D --> E[MinIO Processed Data]
-    E --> F[Airflow DAG]
-    F --> G[Snowflake]
----
-
-##  Tech Stack
 
 | Component           | Technology              |
 |---------------------|--------------------------|
