@@ -62,22 +62,7 @@ An end-to-end real-time data pipeline that detects fraudulent transactions, anal
   - Track `last_updated` timestamps
 
 ---
-## Architecture Overview
 
-```mermaid
-graph TD
-    A[Transaction Simulator] -->|Produce JSON events| B[Kafka Topic<br>"transactions"]
-    B -->|Stream processing| C[Spark Structured Streaming]
-    C -->|Fraud Detection| D1[fraud.parquet]
-    C -->|User Trends| D2[user_trends.parquet]
-    C -->|Category Trends| D3[category_trends.parquet]
-    D1 -->|MinIO Partitioned Storage| E[/raw/fraud/<br>date=YYYY-MM-DD/]
-    D2 -->|MinIO Partitioned Storage| F[/raw/trends/user/]
-    D3 -->|MinIO Partitioned Storage| G[/raw/trends/category/]
-    E -->|Airflow Load| H[Snowflake<br>FRAUD_RECORDS]
-    F -->|Airflow Load| I[Snowflake<br>USER_TRENDS]
-    G -->|Airflow Load| J[Snowflake<br>CATEGORY_TRENDS]
-    H --> K[Fraud Dashboard]
     I --> L[User Analytics]
     J --> M[Product Reports]
 
