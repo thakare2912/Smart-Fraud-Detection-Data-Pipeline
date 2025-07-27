@@ -6,6 +6,15 @@ An end-to-end real-time data pipeline that detects fraudulent transactions, anal
 
 ## Architecture Overview
 
+```mermaid
+flowchart LR
+    A[Kafka Producer] --> B[Kafka Consumer]
+    B --> C[MinIO Raw Storage]
+    C --> D[Spark Streaming]
+    D --> E[MinIO Processed Data]
+    E --> F[Airflow DAG]
+    F --> G[Snowflake]
+
 
 ---
 
@@ -62,7 +71,4 @@ An end-to-end real-time data pipeline that detects fraudulent transactions, anal
   - Track `last_updated` timestamps
 
 ---
-
-    I --> L[User Analytics]
-    J --> M[Product Reports]
 
