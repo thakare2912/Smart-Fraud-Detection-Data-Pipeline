@@ -3,8 +3,7 @@
 An end-to-end real-time data pipeline that detects fraudulent transactions, analyzes user spending behavior, and generates product trend insights using cutting-edge big data tools. Built using **Kafka**, **Spark Structured Streaming**, **MinIO**, **Airflow**, and **Snowflake**.
 
 ---
-
-## Architecture Overview
+## Architecture
 
 ```mermaid
 flowchart LR
@@ -14,8 +13,6 @@ flowchart LR
     D --> E[MinIO Processed Data]
     E --> F[Airflow DAG]
     F --> G[Snowflake]
-
-
 ---
 
 ##  Tech Stack
