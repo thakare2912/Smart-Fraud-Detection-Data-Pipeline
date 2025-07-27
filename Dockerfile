@@ -50,6 +50,6 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # COPY ./src/airflow/plugins /opt/airflow/plugins
 
 # -------------------------------
-# ✅ DEFAULT CMD (Docker Compose overrides this)
+# DEFAULT CMD (Docker Compose overrides this)
 # -------------------------------
 CMD ["webserver"]
