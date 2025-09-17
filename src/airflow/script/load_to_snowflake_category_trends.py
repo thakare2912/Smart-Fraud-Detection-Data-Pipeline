@@ -108,6 +108,11 @@ def read_processed_parquet(s3_client):
             return None
 
         df_all = pd.concat(dfs, ignore_index=True)
+
+        
+
+        # ✅ Add this line to remove duplicates
+        df_all = df_all.drop_duplicates(subset=['category', 'window_start'], keep='last')
         
         # Ensure all required columns exist
         required_columns = [
