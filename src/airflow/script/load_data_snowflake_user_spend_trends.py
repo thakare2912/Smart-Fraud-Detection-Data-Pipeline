@@ -134,7 +134,7 @@ def read_processed_parquet(s3_client):
         return None
 
 def incremental_load_to_snowflake(conn, df):
-    """Load data into Snowflake using MERGE (upsert) with robust error handling."""
+    """Load data into Snowflake using MERGE (upsert) with deduplication."""
     if df is None or df.empty:
         logger.info("No data to load.")
         return
@@ -142,7 +142,7 @@ def incremental_load_to_snowflake(conn, df):
     # 1. Clean and validate the DataFrame
     df.columns = df.columns.str.upper()  # Standardize to uppercase
     df = df.loc[:, ~df.columns.duplicated()]
-    
+
     # Ensure required columns exist
     required_columns = {
         'USER_ID', 'TOTAL_SPENT', 'NUM_TRANSACTIONS',
@@ -152,18 +152,25 @@ def incremental_load_to_snowflake(conn, df):
     if missing_columns:
         raise ValueError(f"Missing required columns: {missing_columns}")
 
+    # 🔑 Deduplicate before loading to avoid Snowflake PK/merge issues
+    before_count = len(df)
+    df = df.drop_duplicates(subset=["USER_ID", "WINDOW_START"], keep="last")
+    after_count = len(df)
+    if after_count < before_count:
+        logger.warning(f"Deduplicated {before_count - after_count} duplicate rows before merge")
+
     cursor = conn.cursor()
     try:
         # 2. Get target table schema
         cursor.execute(f"DESCRIBE TABLE {SNOWFLAKE_TABLE}")
         table_columns = [row[0] for row in cursor.fetchall()]
-        
+
         # 3. Align DataFrame with table schema
         for col in table_columns:
             if col not in df.columns:
                 df[col] = None
                 logger.warning(f"Added missing column: {col}")
-        
+
         df = df[table_columns]
 
         # 4. Create temporary staging table
@@ -194,18 +201,13 @@ def incremental_load_to_snowflake(conn, df):
         columns = list(df.columns)
         placeholders = ",".join(["%s"] * len(columns))
         insert_query = f"INSERT INTO {stage_table} ({','.join(columns)}) VALUES ({placeholders})"
-        
+
         batch_size = 1000
         success_count = 0
         for i in range(0, len(records), batch_size):
-            try:
-                cursor.executemany(insert_query, records[i:i + batch_size])
-                success_count += len(records[i:i + batch_size])
-                logger.info(f"Inserted batch {i//batch_size + 1} ({len(records[i:i + batch_size])} rows)")
-            except Exception as batch_error:
-                logger.error(f"Failed on batch {i//batch_size + 1}: {str(batch_error)}")
-                logger.debug(f"Problematic record sample: {records[i][:5]}...")
-                raise
+            cursor.executemany(insert_query, records[i:i + batch_size])
+            success_count += len(records[i:i + batch_size])
+            logger.info(f"Inserted batch {i//batch_size + 1} ({len(records[i:i + batch_size])} rows)")
 
         # 7. Execute MERGE operation
         merge_query = f"""
@@ -235,6 +237,7 @@ def incremental_load_to_snowflake(conn, df):
         raise
     finally:
         cursor.close()
+
         
 def main():
     """Main execution function."""
