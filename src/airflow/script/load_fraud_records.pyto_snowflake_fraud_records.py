@@ -101,56 +101,62 @@ def create_snowflake_table(conn):
         cursor.close()
 
 def read_processed_parquet(s3_client):
-    """Read and process partitioned parquet files from S3."""
+    """Read and process partitioned parquet files from S3 (MinIO)."""
     logger.info(f"Scanning S3 prefix: s3://{S3_BUCKET}/{S3_PREFIX}")
     try:
         paginator = s3_client.get_paginator('list_objects_v2')
         pages = paginator.paginate(Bucket=S3_BUCKET, Prefix=S3_PREFIX)
-        
+
         dfs = []
         for page in pages:
             if "Contents" not in page:
                 continue
-                
+
             for obj in page["Contents"]:
-                if not obj["Key"].endswith(".parquet") or "_SUCCESS" in obj["Key"]:
+                key = obj["Key"]
+
+                #Skip folders and metadata files
+                if key.endswith("/") or "_SUCCESS" in key or "_temporary" in key:
                     continue
 
-                # Extract partition values from path
-                path_parts = obj["Key"].split('/')
-                partitions = {}
-                for part in path_parts:
-                    if '=' in part:
-                        key, val = part.split('=')
-                        partitions[key] = val
+                if not key.endswith(".parquet"):
+                    continue
 
-                # Read parquet file
-                response_obj = s3_client.get_object(Bucket=S3_BUCKET, Key=obj["Key"])
+                logger.info(f"Processing parquet file: {key}")
+
+                # Extract partition values
+                path_parts = key.split('/')
+                partitions = {k: v for k, v in (p.split('=') for p in path_parts if '=' in p)}
+
+                # Read parquet file into pandas
+                response_obj = s3_client.get_object(Bucket=S3_BUCKET, Key=key)
                 df = pd.read_parquet(io.BytesIO(response_obj["Body"].read()))
 
-                # Standardize column names
-                if 'country' in df.columns:
-                    df.rename(columns={'country': 'user_country'}, inplace=True)
-                
-                # Add partition columns to DataFrame
-                for col in ['payment_method', 'tx_year', 'tx_month', 'tx_day']:
-                    if col in partitions:
-                        df[col] = partitions[col]
-                    elif col not in df.columns:
-                        df[col] = None
+                # Normalize
+                if "country" in df.columns:
+                    df.rename(columns={"country": "user_country"}, inplace=True)
 
-                # Add last_updated timestamp
-                df['last_updated'] = datetime.now()
+                # Add partition columns
+                for col in ["payment_method", "tx_year", "tx_month", "tx_day"]:
+                    df[col] = partitions.get(col, df[col] if col in df.columns else None)
+
+                # Add last_updated
+                df["last_updated"] = datetime.now()
 
                 dfs.append(df)
 
         if not dfs:
-            logger.info("No valid parquet files found.")
+            logger.info("No parquet data found.")
             return None
 
         df_all = pd.concat(dfs, ignore_index=True)
-        
-        # Ensure all required columns exist
+
+        # Deduplicate
+        before = len(df_all)
+        df_all = df_all.drop_duplicates(subset=["transaction_id", "timestamp"], keep="last")
+        logger.info(f"Deduplicated {before - len(df_all)} rows")
+
+        # Ensure schema
         required_columns = [
             'transaction_id', 'user_id', 'product_id', 'store_id', 'amount',
             'payment_method', 'timestamp', 'user_name', 'email', 'user_country',
@@ -159,24 +165,23 @@ def read_processed_parquet(s3_client):
             'country_mismatch', 'high_value_flag', 'fraud_score',
             'discounted_price', 'tx_year', 'tx_month', 'tx_day', 'last_updated'
         ]
-        
         for col in required_columns:
             if col not in df_all.columns:
                 df_all[col] = None
-                logger.warning(f"Added missing column: {col}")
 
-        # Convert timestamps
+        # Fix datetime cols
         for col in ['timestamp', 'signup_date', 'product_added_date']:
             if col in df_all.columns:
-                df_all[col] = pd.to_datetime(df_all[col], errors='coerce')
+                df_all[col] = pd.to_datetime(df_all[col], errors="coerce")
 
-        logger.info(f"Loaded {len(df_all)} records from parquet files.")
+        logger.info(f"Final parquet DataFrame shape: {df_all.shape}")
         return df_all[required_columns]
 
     except Exception as e:
-        logger.error(f"Error reading from S3: {str(e)}")
+        logger.error(f"Error reading parquet: {str(e)}")
         logger.error(traceback.format_exc())
         return None
+
 
 def incremental_load_to_snowflake(conn, df):
     """Load data into Snowflake using MERGE (upsert) with robust error handling."""
@@ -184,47 +189,42 @@ def incremental_load_to_snowflake(conn, df):
         logger.info("No data to load.")
         return
 
-    # 1. Clean and validate the DataFrame
-    # Remove duplicate columns (case-insensitive check)
-    df.columns = df.columns.str.upper()  # Standardize to uppercase
+    # Standardize and clean DataFrame
+    df.columns = df.columns.str.upper()  # Uppercase for Snowflake
     df = df.loc[:, ~df.columns.duplicated()]
-    
-    # Ensure required columns exist
-    required_columns = {
-        'TRANSACTION_ID', 'TIMESTAMP', 'USER_ID', 'PRODUCT_ID', 
-        'STORE_ID', 'AMOUNT', 'PAYMENT_METHOD'
-    }
+
+    # Ensure essential columns exist
+    required_columns = {'TRANSACTION_ID', 'TIMESTAMP', 'USER_ID', 'PRODUCT_ID', 
+                        'STORE_ID', 'AMOUNT', 'PAYMENT_METHOD'}
     missing_columns = required_columns - set(df.columns)
     if missing_columns:
         raise ValueError(f"Missing required columns: {missing_columns}")
 
     cursor = conn.cursor()
     try:
-        # 2. Get target table schema
+        # Get target table schema
         cursor.execute(f"DESCRIBE TABLE {SNOWFLAKE_TABLE}")
         table_columns = [row[0] for row in cursor.fetchall()]
         
-        # 3. Align DataFrame with table schema
-        # Add missing columns with None values
+        # Align DataFrame with table schema
         for col in table_columns:
             if col not in df.columns:
                 df[col] = None
                 logger.warning(f"Added missing column: {col}")
-        
-        # Remove extra columns not in table
+
         extra_columns = set(df.columns) - set(table_columns)
         if extra_columns:
             logger.warning(f"Dropping columns not in table: {extra_columns}")
             df = df[table_columns]
 
-        # 4. Create temporary staging table
+        # Create temporary staging table
         stage_table = "TEMP_STAGE_TRANSACTIONS"
         cursor.execute(f"""
             CREATE OR REPLACE TEMPORARY TABLE {stage_table} 
             AS SELECT * FROM {SNOWFLAKE_TABLE} WHERE 1=0
         """)
 
-        # 5. Prepare data with proper type conversion
+        # Prepare data for insert
         records = []
         for _, row in df.iterrows():
             record = []
@@ -238,12 +238,12 @@ def incremental_load_to_snowflake(conn, df):
                 elif isinstance(val, (np.floating, np.float64)):
                     record.append(float(val))
                 elif isinstance(val, bool):
-                    record.append(str(val).upper())  # 'TRUE'/'FALSE'
+                    record.append(str(val).upper())
                 else:
                     record.append(str(val) if val is not None else None)
             records.append(tuple(record))
 
-        # 6. Batch insert into staging table
+        # Batch insert into staging
         columns = list(df.columns)
         placeholders = ",".join(["%s"] * len(columns))
         insert_query = f"INSERT INTO {stage_table} ({','.join(columns)}) VALUES ({placeholders})"
@@ -257,11 +257,10 @@ def incremental_load_to_snowflake(conn, df):
                 logger.info(f"Inserted batch {i//batch_size + 1} ({len(records[i:i + batch_size])} rows)")
             except Exception as batch_error:
                 logger.error(f"Failed on batch {i//batch_size + 1}: {str(batch_error)}")
-                # Log first problematic record in the batch
                 logger.debug(f"Problematic record sample: {records[i][:5]}...")
                 raise
 
-        # 7. Execute MERGE operation
+        # Execute MERGE
         merge_query = f"""
         MERGE INTO {SNOWFLAKE_DATABASE}.{SNOWFLAKE_SCHEMA}.{SNOWFLAKE_TABLE} AS target
         USING {stage_table} AS source
