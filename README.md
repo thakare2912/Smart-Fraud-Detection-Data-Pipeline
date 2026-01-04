@@ -134,13 +134,41 @@ docker exec -it smart_retail_fraud_trend_pipeline-spark-master-1 /opt/bitnami/sp
 ```
 
 ### 📊 Output Storage 
+```text
 minio/
 └── smart-retail-raw/
     └── process/
         ├── fraud_records/
         ├── user_spend_trends/
         └── category_trends/
+```
+![Processed Data in MinIO](images/minio_processed_data.png)
+*Processed Parquet data in MinIO after transformation*
 
+## ⏱️ Airflow Orchestration
 
+Apache Airflow is used to **orchestrate and monitor** the end-to-end fraud detection pipeline.
+
+The Airflow DAG manages:
+- Execution of Spark streaming and batch jobs
+- Dependency handling between processing steps
+- Retry logic and failure recovery
+- Scheduling of incremental loads into Snowflake
+
+### Airflow Workflow
+1. Trigger Spark job for fraud detection
+2. Validate processed data in MinIO
+3. Load data incrementally into Snowflake
+4. Mark pipeline completion
+
+### Querying in Snowflake
+``` bash
+SELECT *
+FROM SMART_RETAIL_DB.PUBLIC.FRAUD_RECORDS
+LIMIT 10;
+```
+
+![Snowflake Query](images/snowflake_query.png)
+*Sample output from Snowflake showing fraud records*
 
 
