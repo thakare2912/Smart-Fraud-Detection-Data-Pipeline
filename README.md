@@ -1,7 +1,14 @@
+
 # Smart Fraud Detection Data Pipeline
 
-A real-time data pipeline for fraud detection and spending trend analysis.
-## Architecture Overview
+## 📌 Overview
+This project implements an end-to-end data engineering pipeline that ingests retail transaction data in real time, enriches it with user and product information, detects potential fraud, and stores curated results for analytics and reporting.
+
+The pipeline follows production-ready data engineering patterns using Apache Kafka, Spark Structured Streaming, Apache Airflow for orchestration, MinIO as S3-compatible object storage, and Snowflake as the analytical data warehouse.
+
+---
+
+## 🏗️ Architecture Overview
 
 <img src="pipeline_architecture.png" alt="Pipeline Architecture Diagram" width="350" style="max-width:100%;">  
 *Diagram of the data flow from Kafka to Snowflake*
@@ -33,73 +40,16 @@ A real-time data pipeline for fraud detection and spending trend analysis.
 ---
 ---
 
-## How It Works
-
-### 1. **Kafka Producer**
-- Simulates financial transactions with fields like `user_id`, `amount`, `payment_method`, etc.
-- Sends them to a Kafka topic (`transactions`).
-
-### 2. **Spark Structured Streaming**
-- Consumes real-time messages from Kafka.
-- Applies fraud detection rules:
-  - High-value amount + suspicious location
-  - Rapid-fire multiple transactions
-- Computes:
-  - `fraud_records`
-  - `user_spend_trends`
-  - `category_trends`
-- Writes all outputs to MinIO in Parquet format, partitioned by date.
-
-### 3. **Airflow DAGs**
-- Scheduled DAGs read partitioned data from MinIO.
-- Use Python-based loaders to:
-  - Create Snowflake tables if not exist
-  - Insert new data using merge/upsert
-  - Track `last_updated` timestamps
-
----
-
-# Smart Fraud Detection Data Pipeline
-
-## 📌 Overview
-This project implements an **end-to-end data engineering pipeline** that ingests retail transaction data in real time, enriches it with user and product information, detects potential fraud, and writes results to reliable storage for analytics and reporting.
-
-The pipeline is designed with **production-ready patterns** using Apache Kafka, Spark Structured Streaming, Airflow orchestration, MinIO object storage, and Snowflake for warehousing.
-
----
-
-## 🏗️ Architecture Overview
-
-<img src="pipeline_architecture.png" alt="Pipeline Architecture Diagram" width="350" style="max-width:100%;">  
-*Diagram of the data flow from Kafka to Snowflake*
-
-
-| Component           | Technology              |
-|---------------------|--------------------------|
-| Streaming Platform  | Apache Kafka (`confluent_kafka`) |
-| Data Processing     | Apache Spark Structured Streaming |
-| Storage Layer       | MinIO (S3-compatible object storage) |
-| Orchestration       | Apache Airflow (modular DAGs) |
-| Data Warehouse      | Snowflake               |
-| Language            | Python                  |
-| Data Format         | Parquet (partitioned)   |
-
----
-
 ## 📥 Getting Started
 ✅ Prerequisites
 
 Make sure the following tools are installed on your system:
 
-Docker
+- Docker
+- Docker Compose
+- Python 3.8+
+- Snowflake Account (optional – for warehouse testing)
 
-Docker Compose
-
-Python 3.8+
-
-Apache Airflow CLI (optional)
-
-Snowflake Account (optional – for warehouse testing)
 
 ### 📦 Clone the Repository
 
@@ -112,26 +62,41 @@ cd Smart-Fraud-Detection-Data-Pipeline
 ```bash
 docker-compose up -d
 ```
-### check runnig staus 
+### Check running services: 
 ```bash
 docker-compose ps
 ```
-### produce the transaction  data kafka producer 
+## Data Ingestion & Processing
+
+###  Kafka Producer
 ``` bash
 python src\kafka\producer\transction_producer
 ```
+- Simulates financial transactions with fields like `user_id`, `amount`, `payment_method`, etc.
+- Sends them to a Kafka topic (`transactions`).
 
-### consume the data with use kafka conumer and sent to minio 
+###  Kafka Consumer 
 ``` bash
 python src\kafka\consumer\transction_producer
 ```
-### Run the Streaming Pipeline 
+- Consumes messages from Kafka
+- Writes raw transaction data to MinIO
+- User and product reference data are manually added to MinIO
+<img src="images\minio_1.png" alt="Pipeline Architecture Diagram" width="950" style="max-width:100%;">
+
+### Spark Structured Streaming 
 ```bash
 cd src\spark\jobs\spark.py
 ```
 ``` bash
-docker exec -it smart_retail_fraud_trend_pipeline-spark-master-1 /opt/bitnami/spark/bin/spark-submit --master spark://spark-master:7077 --packages org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262 /opt/spark/jobs/spark.py
+docker exec -it smart_retail_fraud_trend_pipeline-spark-master-1 \
+/opt/bitnami/spark/bin/spark-submit \
+--master spark://spark-master:7077 \
+--packages org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262 \
+/opt/spark/jobs/spark.py
+
 ```
+
 
 ### 📊 Output Storage 
 ```text
@@ -142,8 +107,8 @@ minio/
         ├── user_spend_trends/
         └── category_trends/
 ```
-![Processed Data in MinIO](images/minio_processed_data.png)
-*Processed Parquet data in MinIO after transformation*
+<img src="images\minio_2.png" alt="Pipeline Architecture Diagram" width="950" style="max-width:100%;"> 
+*Processed and partitioned Parquet data stored in MinIO*
 
 ## ⏱️ Airflow Orchestration
 
@@ -160,6 +125,7 @@ The Airflow DAG manages:
 2. Validate processed data in MinIO
 3. Load data incrementally into Snowflake
 4. Mark pipeline completion
+<img src="images/airflow  dag.png" alt="Pipeline Architecture Diagram" width="950" style="max-width:100%;">
 
 ### Querying in Snowflake
 ``` bash
@@ -168,7 +134,28 @@ FROM SMART_RETAIL_DB.PUBLIC.FRAUD_RECORDS
 LIMIT 10;
 ```
 
-![Snowflake Query](images/snowflake_query.png)
+<img src="images/snowflake.png" alt="Pipeline Architecture Diagram" width="950" style="max-width:100%;">
+
 *Sample output from Snowflake showing fraud records*
+
+## Key Learnings
+
+- Through building this end-to-end fraud detection data pipeline, I gained hands-on experience with real-world data engineering challenges and best practices, including:
+
+- Designing real-time data pipelines using Apache Kafka and Spark Structured Streaming for continuous ingestion and processing.
+
+- Handling schema evolution and data enrichment, joining streaming data with static reference datasets (users and products).
+
+- Implementing rule-based fraud detection logic and computing window-based aggregations for user spend and category trends.
+
+- Working with S3-compatible object storage (MinIO), including partitioned Parquet layouts for efficient downstream analytics.
+
+- Orchestrating complex pipelines using Apache Airflow, managing task dependencies, retries, and incremental data loads.
+
+- Building custom Docker images to resolve dependency and environment issues, ensuring consistent and reproducible execution.
+
+- Integrating Spark with cloud data warehouses (Snowflake) using incremental load patterns suitable for production systems.
+
+- Improving observability and debugging skills by analyzing logs across Kafka, Spark, and Airflow components.
 
 
