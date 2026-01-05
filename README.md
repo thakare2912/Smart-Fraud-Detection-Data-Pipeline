@@ -10,7 +10,7 @@ The pipeline follows production-ready data engineering patterns using Apache Kaf
 
 ## 🏗️ Architecture Overview
 
-<img src="pipeline_architecture.png" alt="Pipeline Architecture Diagram" width="350" style="max-width:100%;">  
+<img src="pipeline_architecture.png" alt="Pipeline Architecture Diagram" width="550" style="max-width:100%;">  
 *Diagram of the data flow from Kafka to Snowflake*
 
 
