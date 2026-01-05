@@ -70,14 +70,14 @@ docker-compose ps
 
 ###  Kafka Producer
 ``` bash
-python src\kafka\producer\transction_producer
+python src\kafka\producer\transaction_producer.py
 ```
 - Simulates financial transactions with fields like `user_id`, `amount`, `payment_method`, etc.
 - Sends them to a Kafka topic (`transactions`).
 
 ###  Kafka Consumer 
 ``` bash
-python src\kafka\consumer\transction_producer
+python src\kafka\consumer\consumer.py
 ```
 - Consumes messages from Kafka
 - Writes raw transaction data to MinIO
@@ -138,24 +138,21 @@ LIMIT 10;
 
 *Sample output from Snowflake showing fraud records*
 
-## Key Learnings
+## 🧠 Key Learnings
 
-- Through building this end-to-end fraud detection data pipeline, I gained hands-on experience with real-world data engineering challenges and best practices, including:
+Through building this end-to-end fraud detection data pipeline, I gained hands-on experience with real-world data engineering challenges and best practices, including:
 
 - Designing real-time data pipelines using Apache Kafka and Spark Structured Streaming for continuous ingestion and processing.
-
-- Handling schema evolution and data enrichment, joining streaming data with static reference datasets (users and products).
-
+- Handling schema evolution and data enrichment by joining streaming data with static reference datasets (users and products).
 - Implementing rule-based fraud detection logic and computing window-based aggregations for user spend and category trends.
-
 - Working with S3-compatible object storage (MinIO), including partitioned Parquet layouts for efficient downstream analytics.
-
 - Orchestrating complex pipelines using Apache Airflow, managing task dependencies, retries, and incremental data loads.
-
 - Building custom Docker images to resolve dependency and environment issues, ensuring consistent and reproducible execution.
-
 - Integrating Spark with cloud data warehouses (Snowflake) using incremental load patterns suitable for production systems.
-
 - Improving observability and debugging skills by analyzing logs across Kafka, Spark, and Airflow components.
+
+## 🎯 Why This Project Matters
+
+This project reflects real-world data engineering scenarios such as streaming ingestion, fault-tolerant processing, orchestration, and cloud data warehousing. It demonstrates my ability to design, build, debug, and document scalable data pipelines rather than isolated scripts.
 
 
