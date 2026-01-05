@@ -42,14 +42,5 @@ USER airflow
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r /requirements.txt
 
-# -------------------------------
-# COPY ANY CUSTOM SCRIPTS / DAGS (OPTIONAL)
-# If needed — usually mounted as volumes though
-# -------------------------------
-# COPY ./src/airflow/dags /opt/airflow/dags
-# COPY ./src/airflow/plugins /opt/airflow/plugins
-
-# -------------------------------
-# DEFAULT CMD (Docker Compose overrides this)
-# -------------------------------
 CMD ["webserver"]
+
