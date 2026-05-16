@@ -110,13 +110,29 @@ def flush_buffer(topic, records, minio_client):
 
     df = pd.DataFrame(records)
 
-    local_file = f"/tmp/{topic}_batch_{timestamp_str}.csv"
+    # Create local tmp folder if not exists
+    os.makedirs("tmp", exist_ok=True)
+
+    local_file = f"tmp/{topic}_batch_{timestamp_str}.csv"
+
     df.to_csv(local_file, index=False)
 
-    object_name = f"raw/{topic}/year={year}/month={month}/day={day}/batch_{timestamp_str}.csv"
-    minio_client.fput_object(MINIO_BUCKET, object_name, local_file)
+    object_name = (
+        f"raw/{topic}/year={year}/month={month}/day={day}/"
+        f"batch_{timestamp_str}.csv"
+    )
 
-    logger.info(f"Flushed {len(records)} records → s3a://{MINIO_BUCKET}/{object_name}")
+    minio_client.fput_object(
+        MINIO_BUCKET,
+        object_name,
+        local_file
+    )
+
+    logger.info(
+        f"Flushed {len(records)} records → "
+        f"s3a://{MINIO_BUCKET}/{object_name}"
+    )
 
 if __name__ == "__main__":
     main()
+
